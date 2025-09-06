@@ -24,7 +24,7 @@ const configParsers = {
 	OPENAI_KEY(key?: string) {
 		if (!key) {
 			throw new KnownError(
-				'Please set your OpenAI API key via `aicommits config set OPENAI_KEY=<your token>`'
+				'Please set your OpenAI API key via `comai config set OPENAI_KEY=<your token>`'
 			);
 		}
 		parseAssert('OPENAI_KEY', key.startsWith('sk-'), 'Must start with "sk-"');
@@ -82,7 +82,8 @@ const configParsers = {
 	},
 	model(model?: string) {
 		if (!model || model.length === 0) {
-			return 'gpt-3.5-turbo';
+			return 'gpt-5';
+			
 		}
 
 		return model as TiktokenModel;
@@ -127,7 +128,7 @@ export type ValidConfig = {
 	[Key in ConfigKeys]: ReturnType<(typeof configParsers)[Key]>;
 };
 
-const configPath = path.join(os.homedir(), '.aicommits');
+const configPath = path.join(os.homedir(), '.comai');
 
 const readConfigFile = async (): Promise<RawConfig> => {
 	const configExists = await fileExists(configPath);

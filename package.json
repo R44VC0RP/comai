@@ -1,5 +1,5 @@
 {
-	"name": "aicommits",
+	"name": "comai",
 	"version": "0.0.0-semantic-release",
 	"description": "Writes your git commit messages for you with AI",
 	"keywords": [
@@ -15,8 +15,7 @@
 		"dist"
 	],
 	"bin": {
-		"aicommits": "./dist/cli.mjs",
-		"aic": "./dist/cli.mjs"
+		"comai": "./dist/cli.mjs"
 	},
 	"scripts": {
 		"build": "pkgroll --minify",
