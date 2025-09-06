@@ -9,6 +9,8 @@
 
 ---
 
+(thanks to Nutlopes for developing most of this, but I wanted to keep it updated with newer models and some quality of life changes)
+
 ## Setup
 
 > The minimum supported version of Node.js is the latest v14. Check your Node.js version with `node --version`.
@@ -39,7 +41,7 @@ Check the installed version with:
 comai --version
 ```
 
-If it's not the [latest version](https://github.com/Nutlope/aicommits/releases/latest), run:
+If it's not the [latest version](https://github.com/R44VC0RP/comai/releases/latest), run:
 
 ```sh
 npm update -g comai
@@ -118,6 +120,62 @@ comai hook uninstall
 2. Comai will generate the commit message for you and pass it back to Git. Git will open it with the [configured editor](https://docs.github.com/en/get-started/getting-started-with-git/associating-text-editors-with-git) for you to review/edit it.
 
 3. Save and close the editor to commit!
+
+## CLI Options
+
+You can set persistent CLI options so you don't have to specify flags every time you run `comai`.
+
+### Managing CLI Options
+
+#### Show current options
+```sh
+comai options
+# or
+comai options show
+```
+
+#### Set options
+```sh
+comai options set all=true
+comai options set generate=3
+comai options set type=conventional
+comai options set exclude=package-lock.json,dist/
+```
+
+#### Get specific options
+```sh
+comai options get all
+comai options get generate
+```
+
+#### Clear options
+```sh
+comai options clear all
+comai options clear generate
+```
+
+### Available Options
+
+- **all**: `true|false` - Automatically stage all tracked files (equivalent to `--all` flag)
+- **exclude**: `file1,file2` - Comma-separated list of files to exclude (equivalent to `--exclude` flag)
+- **generate**: `1-5` - Number of commit messages to generate (equivalent to `--generate` flag)
+- **type**: `conventional` - Type of commit message format (equivalent to `--type` flag)
+
+### How it works
+
+Once you set options, `comai` will use them as defaults every time you run it. CLI flags will always override stored options.
+
+For example:
+```sh
+# Set preferences
+comai options set all=true generate=2
+
+# This will use your stored preferences
+comai
+
+# This will override the stored generate setting for this run only
+comai --generate 5
+```
 
 ## Configuration
 
@@ -245,10 +303,9 @@ Video coming soon where I rebuild it from scratch to show you how to easily buil
 
 ## Maintainers
 
-- **Hassan El Mghari**: [@Nutlope](https://github.com/Nutlope) [<img src="https://img.shields.io/twitter/follow/nutlope?style=flat&label=nutlope&logo=twitter&color=0bf&logoColor=fff" align="center">](https://twitter.com/nutlope)
+- **Ryan Vogel**: [@R44VC0RP](https://github.com/R44VC0RP)
 
-- **Hiroki Osame**: [@privatenumber](https://github.com/privatenumber) [<img src="https://img.shields.io/twitter/follow/privatenumbr?style=flat&label=privatenumbr&logo=twitter&color=0bf&logoColor=fff" align="center">](https://twitter.com/privatenumbr)
 
 ## Contributing
 
-If you want to help fix a bug or implement a feature in [Issues](https://github.com/Nutlope/aicommits/issues), checkout the [Contribution Guide](CONTRIBUTING.md) to learn how to setup and test the project
+If you want to help fix a bug or implement a feature in [Issues](https://github.com/R44VC0RP/comai/issues), checkout the [Contribution Guide](CONTRIBUTING.md) to learn how to setup and test the project

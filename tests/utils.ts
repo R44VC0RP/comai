@@ -7,16 +7,16 @@ import {
 	type FsFixture,
 } from 'fs-fixture';
 
-const aicommitsPath = path.resolve('./dist/cli.mjs');
+const comaiPath = path.resolve('./dist/cli.mjs');
 
-const createAicommits = (fixture: FsFixture) => {
+const createComai = (fixture: FsFixture) => {
 	const homeEnv = {
 		HOME: fixture.path, // Linux
 		USERPROFILE: fixture.path, // Windows
 	};
 
 	return (args?: string[], options?: Options) =>
-		execaNode(aicommitsPath, args, {
+		execaNode(comaiPath, args, {
 			cwd: fixture.path,
 			...options,
 			extendEnv: false,
@@ -50,16 +50,16 @@ export const createGit = async (cwd: string) => {
 
 export const createFixture = async (source?: string | FileTree) => {
 	const fixture = await createFixtureBase(source);
-	const aicommits = createAicommits(fixture);
+	const comai = createComai(fixture);
 
 	return {
 		fixture,
-		aicommits,
+		comai,
 	};
 };
 
 export const files = Object.freeze({
-	'.aicommits': `OPENAI_KEY=${process.env.OPENAI_KEY}`,
+	'.comai': `OPENAI_KEY=${process.env.OPENAI_KEY}`,
 	'data.json': Array.from(
 		{ length: 10 },
 		(_, i) => `${i}. Lorem ipsum dolor sit amet`

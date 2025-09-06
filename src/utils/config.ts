@@ -21,8 +21,11 @@ const parseAssert = (name: string, condition: any, message: string) => {
 };
 
 const configParsers = {
-	OPENAI_KEY(key?: string) {
+	OPENAI_KEY(key?: string, isOptional = false) {
 		if (!key) {
+			if (isOptional) {
+				return undefined;
+			}
 			throw new KnownError(
 				'Please set your OpenAI API key via `comai config set OPENAI_KEY=<your token>`'
 			);
@@ -116,6 +119,45 @@ const configParsers = {
 
 		return parsed;
 	},
+	all(all?: string | boolean) {
+		if (all === undefined || all === null || all === '') {
+			return false;
+		}
+
+		// Handle boolean values directly
+		if (typeof all === 'boolean') {
+			return all;
+		}
+
+		// Handle string values
+		if (typeof all === 'string') {
+			parseAssert('all', /^(true|false)$/i.test(all), 'Must be true or false');
+			return all.toLowerCase() === 'true';
+		}
+
+		return false;
+	},
+	exclude(exclude?: string | string[]) {
+		if (!exclude) {
+			return [];
+		}
+
+		// Handle array values directly (from INI parser)
+		if (Array.isArray(exclude)) {
+			return exclude.filter(file => file && file.trim().length > 0);
+		}
+
+		// Handle string values
+		if (typeof exclude === 'string') {
+			if (exclude.length === 0) {
+				return [];
+			}
+			// Split by comma and trim whitespace
+			return exclude.split(',').map(file => file.trim()).filter(file => file.length > 0);
+		}
+
+		return [];
+	},
 } as const;
 
 type ConfigKeys = keyof typeof configParsers;
@@ -142,7 +184,8 @@ const readConfigFile = async (): Promise<RawConfig> => {
 
 export const getConfig = async (
 	cliConfig?: RawConfig,
-	suppressErrors?: boolean
+	suppressErrors?: boolean,
+	optionalKeys?: ConfigKeys[]
 ): Promise<ValidConfig> => {
 	const config = await readConfigFile();
 	const parsedConfig: Record<string, unknown> = {};
@@ -150,13 +193,16 @@ export const getConfig = async (
 	for (const key of Object.keys(configParsers) as ConfigKeys[]) {
 		const parser = configParsers[key];
 		const value = cliConfig?.[key] ?? config[key];
+		const isOptional = optionalKeys?.includes(key) || false;
 
 		if (suppressErrors) {
 			try {
-				parsedConfig[key] = parser(value);
+				// Pass isOptional flag for OPENAI_KEY
+				parsedConfig[key] = key === 'OPENAI_KEY' ? parser(value, isOptional) : parser(value);
 			} catch {}
 		} else {
-			parsedConfig[key] = parser(value);
+			// Pass isOptional flag for OPENAI_KEY
+			parsedConfig[key] = key === 'OPENAI_KEY' ? parser(value, isOptional) : parser(value);
 		}
 	}
 
