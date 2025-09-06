@@ -1,109 +1,7 @@
-import https from 'https';
-import type { ClientRequest, IncomingMessage } from 'http';
-import type {
-	CreateChatCompletionRequest,
-	CreateChatCompletionResponse,
-} from 'openai';
-import {
-	type TiktokenModel,
-	// encoding_for_model,
-} from '@dqbd/tiktoken';
-import createHttpsProxyAgent from 'https-proxy-agent';
+import OpenAI from 'openai';
 import { KnownError } from './error.js';
 import type { CommitType } from './config.js';
 import { generatePrompt } from './prompt.js';
-
-const httpsPost = async (
-	hostname: string,
-	path: string,
-	headers: Record<string, string>,
-	json: unknown,
-	timeout: number,
-	proxy?: string
-) =>
-	new Promise<{
-		request: ClientRequest;
-		response: IncomingMessage;
-		data: string;
-	}>((resolve, reject) => {
-		const postContent = JSON.stringify(json);
-		const request = https.request(
-			{
-				port: 443,
-				hostname,
-				path,
-				method: 'POST',
-				headers: {
-					...headers,
-					'Content-Type': 'application/json',
-					'Content-Length': Buffer.byteLength(postContent),
-				},
-				timeout,
-				agent: proxy ? createHttpsProxyAgent(proxy) : undefined,
-			},
-			(response) => {
-				const body: Buffer[] = [];
-				response.on('data', (chunk) => body.push(chunk));
-				response.on('end', () => {
-					resolve({
-						request,
-						response,
-						data: Buffer.concat(body).toString(),
-					});
-				});
-			}
-		);
-		request.on('error', reject);
-		request.on('timeout', () => {
-			request.destroy();
-			reject(
-				new KnownError(
-					`Time out error: request took over ${timeout}ms. Try increasing the \`timeout\` config, or checking the OpenAI API status https://status.openai.com`
-				)
-			);
-		});
-
-		request.write(postContent);
-		request.end();
-	});
-
-const createChatCompletion = async (
-	apiKey: string,
-	json: CreateChatCompletionRequest,
-	timeout: number,
-	proxy?: string
-) => {
-	const { response, data } = await httpsPost(
-		'api.openai.com',
-		'/v1/chat/completions',
-		{
-			Authorization: `Bearer ${apiKey}`,
-		},
-		json,
-		timeout,
-		proxy
-	);
-
-	if (
-		!response.statusCode ||
-		response.statusCode < 200 ||
-		response.statusCode > 299
-	) {
-		let errorMessage = `OpenAI API Error: ${response.statusCode} - ${response.statusMessage}`;
-
-		if (data) {
-			errorMessage += `\n\n${data}`;
-		}
-
-		if (response.statusCode === 500) {
-			errorMessage += '\n\nCheck the API status: https://status.openai.com';
-		}
-
-		throw new KnownError(errorMessage);
-	}
-
-	return JSON.parse(data) as CreateChatCompletionResponse;
-};
 
 const sanitizeMessage = (message: string) =>
 	message
@@ -113,26 +11,9 @@ const sanitizeMessage = (message: string) =>
 
 const deduplicateMessages = (array: string[]) => Array.from(new Set(array));
 
-// const generateStringFromLength = (length: number) => {
-// 	let result = '';
-// 	const highestTokenChar = 'z';
-// 	for (let i = 0; i < length; i += 1) {
-// 		result += highestTokenChar;
-// 	}
-// 	return result;
-// };
-
-// const getTokens = (prompt: string, model: TiktokenModel) => {
-// 	const encoder = encoding_for_model(model);
-// 	const tokens = encoder.encode(prompt).length;
-// 	// Free the encoder to avoid possible memory leaks.
-// 	encoder.free();
-// 	return tokens;
-// };
-
 export const generateCommitMessage = async (
 	apiKey: string,
-	model: TiktokenModel,
+	model: string,
 	locale: string,
 	diff: string,
 	completions: number,
@@ -142,42 +23,84 @@ export const generateCommitMessage = async (
 	proxy?: string
 ) => {
 	try {
-		const completion = await createChatCompletion(
+		// Initialize OpenAI client
+		const clientOptions: OpenAI.ClientOptions = {
 			apiKey,
-			{
-				model,
-				messages: [
-					{
-						role: 'system',
-						content: generatePrompt(locale, maxLength, type),
-					},
-					{
-						role: 'user',
-						content: diff,
-					},
-				],
-				top_p: 1,
-				frequency_penalty: 0,
-				presence_penalty: 0,
-				max_completion_tokens: 200,
-				stream: false,
-				n: completions,
-			},
 			timeout,
-			proxy
-		);
+		};
 
+		// Add proxy support if provided
+		if (proxy) {
+			const { HttpsProxyAgent } = await import('https-proxy-agent');
+			clientOptions.httpAgent = new HttpsProxyAgent(proxy);
+		}
+
+		const client = new OpenAI(clientOptions);
+
+		// Generate the system prompt
+		const instructions = generatePrompt(locale, maxLength, type);
+
+		// Generate multiple responses by making multiple requests
+		const requestPromises = [];
+		for (let i = 0; i < completions; i++) {
+			requestPromises.push(
+				client.responses.create({
+					model,
+					instructions,
+					input: diff,
+				})
+			);
+		}
+
+		// Wait for all requests to complete
+		const responses = await Promise.all(requestPromises);
+		
+		// Extract text from all responses
+		let messages: string[] = [];
+		
+		for (const response of responses) {
+			if (response.output_text) {
+				// Use the convenience property if available
+				messages.push(response.output_text);
+			} else if (response.output && Array.isArray(response.output)) {
+				// Otherwise, extract from the output array
+				for (const outputItem of response.output) {
+					if (outputItem.type === 'message' && outputItem.role === 'assistant') {
+						for (const contentItem of outputItem.content) {
+							if (contentItem.type === 'output_text' && contentItem.text) {
+								messages.push(contentItem.text);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Process and return messages
 		return deduplicateMessages(
-			completion.choices
-				.filter((choice) => choice.message?.content)
-				.map((choice) => sanitizeMessage(choice.message!.content as string))
+			messages
+				.filter(message => message && message.trim().length > 0)
+				.map(message => sanitizeMessage(message))
 		);
 	} catch (error) {
 		const errorAsAny = error as any;
+		
+		// Handle network errors
 		if (errorAsAny.code === 'ENOTFOUND') {
 			throw new KnownError(
 				`Error connecting to ${errorAsAny.hostname} (${errorAsAny.syscall}). Are you connected to the internet?`
 			);
+		}
+
+		// Handle OpenAI API errors
+		if (errorAsAny instanceof OpenAI.APIError) {
+			let errorMessage = `OpenAI API Error: ${errorAsAny.status} - ${errorAsAny.message}`;
+			
+			if (errorAsAny.status === 500) {
+				errorMessage += '\n\nCheck the API status: https://status.openai.com';
+			}
+			
+			throw new KnownError(errorMessage);
 		}
 
 		throw errorAsAny;
